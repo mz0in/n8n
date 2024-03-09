@@ -49,7 +49,7 @@ export class FrontendService {
 		private readonly urlService: UrlService,
 		private readonly internalHooks: InternalHooks,
 	) {
-		loadNodesAndCredentials.addPostProcessor(async () => this.generateTypes());
+		loadNodesAndCredentials.addPostProcessor(async () => await this.generateTypes());
 		void this.generateTypes();
 
 		this.initSettings();
@@ -83,6 +83,7 @@ export class FrontendService {
 		}
 
 		this.settings = {
+			previewMode: process.env.N8N_PREVIEW_MODE === 'true',
 			endpointForm: config.getEnv('endpoints.form'),
 			endpointFormTest: config.getEnv('endpoints.formTest'),
 			endpointFormWaiting: config.getEnv('endpoints.formWaiting'),
@@ -97,6 +98,7 @@ export class FrontendService {
 			timezone: config.getEnv('generic.timezone'),
 			urlBaseWebhook: this.urlService.getWebhookBaseUrl(),
 			urlBaseEditor: instanceBaseUrl,
+			binaryDataMode: config.getEnv('binaryDataManager.mode'),
 			versionCli: '',
 			releaseChannel: config.getEnv('generic.releaseChannel'),
 			oauthCallbackUrls: {
@@ -115,9 +117,7 @@ export class FrontendService {
 				apiHost: config.getEnv('diagnostics.config.posthog.apiHost'),
 				apiKey: config.getEnv('diagnostics.config.posthog.apiKey'),
 				autocapture: false,
-				disableSessionRecording: config.getEnv(
-					'diagnostics.config.posthog.disableSessionRecording',
-				),
+				disableSessionRecording: config.getEnv('deployment.type') !== 'cloud',
 				debug: config.getEnv('logs.level') === 'debug',
 			},
 			personalizationSurveyEnabled:
@@ -308,6 +308,8 @@ export class FrontendService {
 		this.settings.mfa.enabled = config.get('mfa.enabled');
 
 		this.settings.executionMode = config.getEnv('executions.mode');
+
+		this.settings.binaryDataMode = config.getEnv('binaryDataManager.mode');
 
 		return this.settings;
 	}

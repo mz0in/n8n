@@ -38,6 +38,8 @@ import { deepCopy } from '@/utils';
 import { getGlobalState } from '@/GlobalState';
 import { ApplicationError } from '@/errors/application.error';
 import { NodeTypes as NodeTypesClass } from './NodeTypes';
+import { readFileSync } from 'fs';
+import path from 'path';
 
 export interface INodeTypesObject {
 	[key: string]: INodeType;
@@ -189,7 +191,7 @@ export function getExecuteFunctions(
 				workflowInfo: IExecuteWorkflowInfo,
 				inputData?: INodeExecutionData[],
 			): Promise<any> {
-				return additionalData.executeWorkflow(workflowInfo, additionalData, { inputData });
+				return await additionalData.executeWorkflow(workflowInfo, additionalData, { inputData });
 			},
 			getContext(type: string): IContextObject {
 				return NodeHelpers.getContext(runExecutionData, type, node);
@@ -558,3 +560,7 @@ export function WorkflowExecuteAdditionalData(): IWorkflowExecuteAdditionalData 
 		userId: '123',
 	};
 }
+
+const BASE_DIR = path.resolve(__dirname, '..');
+export const readJsonFileSync = <T>(filePath: string) =>
+	JSON.parse(readFileSync(path.join(BASE_DIR, filePath), 'utf-8')) as T;

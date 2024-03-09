@@ -6,7 +6,7 @@ import { parse } from 'flatted';
 
 export const NO_NETWORK_ERROR_CODE = 999;
 
-class ResponseError extends Error {
+export class ResponseError extends Error {
 	// The HTTP status code of response
 	httpStatusCode?: number;
 
@@ -139,7 +139,7 @@ export async function get(
 	params?: IDataObject,
 	headers?: IDataObject,
 ) {
-	return request({ method: 'GET', baseURL, endpoint, headers, data: params });
+	return await request({ method: 'GET', baseURL, endpoint, headers, data: params });
 }
 
 export async function post(
@@ -148,7 +148,7 @@ export async function post(
 	params?: IDataObject,
 	headers?: IDataObject,
 ) {
-	return request({ method: 'POST', baseURL, endpoint, headers, data: params });
+	return await request({ method: 'POST', baseURL, endpoint, headers, data: params });
 }
 
 /**

@@ -70,48 +70,24 @@
 					data-test-id="ndv-edit-pinned-data"
 					@click="enterEditMode({ origin: 'editIconButton' })"
 				/>
-				<n8n-tooltip
-					v-if="canPinData && rawInputData.length"
-					v-show="!editMode.enabled"
-					placement="bottom-end"
-					:visible="
-						isControlledPinDataTooltip
-							? isControlledPinDataTooltip && pinDataDiscoveryTooltipVisible
-							: undefined
-					"
-				>
-					<template v-if="!isControlledPinDataTooltip" #content>
-						<div :class="$style.tooltipContainer">
-							<strong>{{ $locale.baseText('ndv.pinData.pin.title') }}</strong>
-							<n8n-text size="small" tag="p">
-								{{ $locale.baseText('ndv.pinData.pin.description') }}
 
-								<n8n-link :to="dataPinningDocsUrl" size="small">
-									{{ $locale.baseText('ndv.pinData.pin.link') }}
-								</n8n-link>
-							</n8n-text>
-						</div>
-					</template>
-					<template v-else #content>
-						<div :class="$style.tooltipContainer">
-							{{ $locale.baseText('node.discovery.pinData.ndv') }}
-						</div>
-					</template>
-					<n8n-icon-button
-						:class="['ml-2xs', $style.pinDataButton]"
-						type="tertiary"
-						:active="pinnedData.hasData.value"
-						icon="thumbtack"
-						:disabled="
-							editMode.enabled ||
-							(rawInputData.length === 0 && !pinnedData.hasData.value) ||
-							isReadOnlyRoute ||
-							readOnlyEnv
-						"
-						data-test-id="ndv-pin-data"
-						@click="onTogglePinData({ source: 'pin-icon-click' })"
-					/>
-				</n8n-tooltip>
+				<RunDataPinButton
+					v-if="(canPinData || !!binaryData?.length) && rawInputData.length && !editMode.enabled"
+					:disabled="
+						(!rawInputData.length && !pinnedData.hasData.value) ||
+						isReadOnlyRoute ||
+						readOnlyEnv ||
+						!!binaryData?.length
+					"
+					:tooltip-contents-visibility="{
+						binaryDataTooltipContent: !!binaryData?.length,
+						pinDataDiscoveryTooltipContent:
+							isControlledPinDataTooltip && pinDataDiscoveryTooltipVisible,
+					}"
+					:data-pinning-docs-url="dataPinningDocsUrl"
+					:pinned-data="pinnedData"
+					@toggle-pin-data="onTogglePinData({ source: 'pin-icon-click' })"
+				/>
 
 				<div v-show="editMode.enabled" :class="$style.editModeActions">
 					<n8n-button
@@ -197,11 +173,12 @@
 
 		<div
 			v-else-if="
+				!hasRunError &&
 				hasNodeRun &&
 				((dataCount > 0 && maxRunIndex === 0) || search) &&
 				!isArtificialRecoveredEventItem
 			"
-			v-show="!editMode.enabled"
+			v-show="!editMode.enabled && !hasRunError"
 			:class="$style.itemsCount"
 			data-test-id="ndv-items-count"
 		>
@@ -618,15 +595,23 @@ import { useNDVStore } from '@/stores/ndv.store';
 import { useNodeTypesStore } from '@/stores/nodeTypes.store';
 import { useNodeHelpers } from '@/composables/useNodeHelpers';
 import { useToast } from '@/composables/useToast';
-import { isObject } from 'lodash-es';
+import { isEqual, isObject } from 'lodash-es';
 import { useExternalHooks } from '@/composables/useExternalHooks';
 import { useSourceControlStore } from '@/stores/sourceControl.store';
+import { useRootStore } from '@/stores/n8nRoot.store';
+import RunDataPinButton from '@/components/RunDataPinButton.vue';
 
-const RunDataTable = defineAsyncComponent(async () => import('@/components/RunDataTable.vue'));
-const RunDataJson = defineAsyncComponent(async () => import('@/components/RunDataJson.vue'));
-const RunDataSchema = defineAsyncComponent(async () => import('@/components/RunDataSchema.vue'));
-const RunDataHtml = defineAsyncComponent(async () => import('@/components/RunDataHtml.vue'));
-const RunDataSearch = defineAsyncComponent(async () => import('@/components/RunDataSearch.vue'));
+const RunDataTable = defineAsyncComponent(
+	async () => await import('@/components/RunDataTable.vue'),
+);
+const RunDataJson = defineAsyncComponent(async () => await import('@/components/RunDataJson.vue'));
+const RunDataSchema = defineAsyncComponent(
+	async () => await import('@/components/RunDataSchema.vue'),
+);
+const RunDataHtml = defineAsyncComponent(async () => await import('@/components/RunDataHtml.vue'));
+const RunDataSearch = defineAsyncComponent(
+	async () => await import('@/components/RunDataSearch.vue'),
+);
 
 export type EnterEditModeArgs = {
 	origin: 'editIconButton' | 'insertTestDataLink';
@@ -643,6 +628,7 @@ export default defineComponent({
 		RunDataSchema,
 		RunDataHtml,
 		RunDataSearch,
+		RunDataPinButton,
 	},
 	props: {
 		node: {
@@ -753,12 +739,38 @@ export default defineComponent({
 			this.setDisplayMode();
 			this.activatePane();
 		}
+
+		if (this.hasRunError) {
+			const error = this.workflowRunData?.[this.node.name]?.[this.runIndex]?.error;
+			const errorsToTrack = ['unknown error'];
+
+			if (error && errorsToTrack.some((e) => error.message.toLowerCase().includes(e))) {
+				this.$telemetry.track(
+					`User encountered an error: "${error.message}"`,
+					{
+						node: this.node.type,
+						errorMessage: error.message,
+						nodeVersion: this.node.typeVersion,
+						n8nVersion: this.rootStore.versionCli,
+					},
+					{
+						withPostHog: true,
+					},
+				);
+			}
+		}
 	},
 	beforeUnmount() {
 		this.hidePinDataDiscoveryTooltip();
 	},
 	computed: {
-		...mapStores(useNodeTypesStore, useNDVStore, useWorkflowsStore, useSourceControlStore),
+		...mapStores(
+			useNodeTypesStore,
+			useNDVStore,
+			useWorkflowsStore,
+			useSourceControlStore,
+			useRootStore,
+		),
 		isReadOnlyRoute() {
 			return this.$route?.meta?.readOnlyCanvas === true;
 		},
@@ -1399,7 +1411,7 @@ export default defineComponent({
 				return;
 			} else {
 				const bufferString = 'data:' + mimeType + ';base64,' + data;
-				const blob = await fetch(bufferString).then(async (d) => d.blob());
+				const blob = await fetch(bufferString).then(async (d) => await d.blob());
 				saveAs(blob, fileName);
 			}
 		},
@@ -1488,7 +1500,8 @@ export default defineComponent({
 		},
 	},
 	watch: {
-		node() {
+		node(newNode: INodeUi, prevNode: INodeUi) {
+			if (newNode.id === prevNode.id) return;
 			this.init();
 		},
 		hasNodeRun() {
@@ -1506,9 +1519,10 @@ export default defineComponent({
 			immediate: true,
 			deep: true,
 		},
-		jsonData(value: IDataObject[]) {
+		jsonData(data: IDataObject[], prevData: IDataObject[]) {
+			if (isEqual(data, prevData)) return;
 			this.refreshDataSize();
-			this.showPinDataDiscoveryTooltip(value);
+			this.showPinDataDiscoveryTooltip(data);
 		},
 		binaryData(newData: IBinaryKeyData[], prevData: IBinaryKeyData[]) {
 			if (newData.length && !prevData.length && this.displayMode !== 'binary') {
@@ -1719,12 +1733,6 @@ export default defineComponent({
 }
 .tooltipContain {
 	max-width: 240px;
-}
-
-.pinDataButton {
-	svg {
-		transition: transform 0.3s ease;
-	}
 }
 
 .spinner {
