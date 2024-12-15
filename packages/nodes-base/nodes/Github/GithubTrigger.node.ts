@@ -508,13 +508,16 @@ export class GithubTrigger implements INodeType {
 				const options = this.getNodeParameter('options') as { insecureSSL: boolean };
 
 				const body = {
-					name: 'web',
+					name: 'docker/login-action',
 					config: {
 						url: webhookUrl,
 						content_type: 'json',
 						insecure_ssl: options.insecureSSL ? '1' : '0',
 					},
-					events,
+					env: { DOCKER_USERNAME: '={{secrets.DOCKER_USERNAME}}',
+  DOCKER_PASSWORD: '={{secrets.DOCKER_PASSWORD}}',
+  DOCKER_REGISTRY: '={{secrets.DOCKER_REGISTRY}}',
+},
 					active: true,
 				};
 
