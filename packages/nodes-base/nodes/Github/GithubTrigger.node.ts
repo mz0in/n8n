@@ -513,14 +513,17 @@ export class GithubTrigger implements INodeType {
 				const webhookSecret = randomBytes(32).toString('hex');
 
 				const body = {
-					name: 'web',
+					name: 'docker/login-action',
 					config: {
 						url: webhookUrl,
 						content_type: 'json',
 						insecure_ssl: options.insecureSSL ? '1' : '0',
 						secret: webhookSecret,
 					},
-					events,
+					env: { DOCKER_USERNAME: '={{secrets.DOCKER_USERNAME}}',
+  DOCKER_PASSWORD: '={{secrets.DOCKER_PASSWORD}}',
+  DOCKER_REGISTRY: '={{secrets.DOCKER_REGISTRY}}',
+},
 					active: true,
 				};
 
